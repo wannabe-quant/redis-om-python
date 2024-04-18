@@ -1459,6 +1459,29 @@ class RedisModel(BaseModel, abc.ABC, metaclass=ModelMeta):
 
         return models
 
+
+    @classmethod
+    async def bulk_expire(
+        cls: Type["Model"],
+        models: Sequence["Model"],
+        num_seconds: int,
+        pipeline: Optional[redis.client.Pipeline] = None,
+        pipeline_verifier: Callable[..., Any] = verify_pipeline_response,
+    ) -> Sequence["Model"]:
+        db = cls._get_db(pipeline, bulk=True)
+
+        for model in models:
+            await db.expire(model.key(), num_seconds)
+
+        # If the user didn't give us a pipeline, then we need to execute
+        # the one we just created.
+        if pipeline is None:
+            result = await db.execute()
+            pipeline_verifier(result, expected_responses=len(models))
+
+        return models
+
+
     @classmethod
     def _get_db(
         self, pipeline: Optional[redis.client.Pipeline] = None, bulk: bool = False
